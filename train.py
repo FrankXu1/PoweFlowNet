@@ -21,12 +21,7 @@ import wandb
 def main():
     # Step 0: Parse Arguments and Setup
     args = argument_parser()
-    run_id = datetime.now().strftime("%Y%m%d") + '-' + str(random.randint(0, 9999))
-    LOG_DIR = 'logs'
-    SAVE_DIR = 'models'
-    TRAIN_LOG_PATH = os.path.join(LOG_DIR, 'train_log/train_log_'+run_id+'.pt')
-    SAVE_LOG_PATH = os.path.join(LOG_DIR, 'save_logs.json')
-    SAVE_MODEL_PATH = os.path.join(SAVE_DIR, 'model_'+run_id+'.pt')
+
     models = {
         'MPN': MPN,
         'MPN_simplenet': MPN_simplenet,
@@ -57,6 +52,15 @@ def main():
     conv_K = args.K
     dropout_rate = args.dropout_rate
     model = models[args.model]
+
+    run_id = datetime.now().strftime("%Y%m%d") + '-batch_size_' + str(batch_size) + '-model_ ' + args.model + \
+        '-case_' + args.case + '-loss_fn_' + args.train_loss_fn + '-lr_' + str(lr) + '-epochs_' + str(num_epochs) + \
+        '-' + datetime.now().strftime("%H%M")
+    LOG_DIR = 'logs'
+    SAVE_DIR = 'models'
+    TRAIN_LOG_PATH = os.path.join(LOG_DIR, 'train_log/train_log_'+run_id+'.pt')
+    SAVE_LOG_PATH = os.path.join(LOG_DIR, 'save_logs.json')
+    SAVE_MODEL_PATH = os.path.join(SAVE_DIR, 'model_'+run_id+'.pt')
 
     log_to_wandb = args.wandb
     wandb_entity = args.wandb_entity

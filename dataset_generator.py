@@ -16,8 +16,8 @@ import os
 
 from utils.data_utils import perturb_topology
 
-number_of_samples = 1
-number_of_processes = 1
+number_of_samples = 30000
+number_of_processes = 10
 
 def create_case3():
     net = pp.create_empty_network()
@@ -57,7 +57,7 @@ def get_trafo_z_pu(net):
     r_pu = net.trafo['vkr_percent'].values / 100. / net.sn_mva
     x_pu = np.sqrt(z_pu**2 - r_pu**2)
     
-    return x_pu, r_pu
+    return  r_pu,x_pu
     
 def get_line_z_pu(net):
     r = net.line['r_ohm_per_km'].values * net.line['length_km'].values
@@ -276,10 +276,10 @@ if __name__ == '__main__':
 
     # save the features
     os.makedirs("./data/raw", exist_ok=True)
-    with open("./data/raw/"+complete_case_name+"_3_edge_features.npy", 'wb') as f:
+    with open("./data/raw/"+complete_case_name+"_4_edge_features.npy", 'wb') as f:
         np.save(f, edge_features)
 
-    with open("./data/raw/"+complete_case_name+"_3_node_features.npy", 'wb') as f:
+    with open("./data/raw/"+complete_case_name+"_4_node_features.npy", 'wb') as f:
         np.save(f, node_features)
 
     # with open("./data/"+test_case+"_graph_features.npy", 'wb') as f:
