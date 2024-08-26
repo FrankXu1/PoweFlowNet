@@ -23,7 +23,13 @@ SAVE_DIR = 'models'
 
 @torch.no_grad()
 def main():
-    run_id = '20240503-29'
+    # run_id = '20240429-6990' # 原始code自带的
+    # run_id = '20240808-4939' # 原始论文训练出来的
+    # run_id = '20240823-2962' # 我们小数据集训练出来的，1000epoch
+    # run_id = "20240823-2352" # 大数据集训练出来的，1000epoch
+    run_id = "20240823-3332" # 小训练集但是2000epoch
+
+
     # logging.basicConfig(filename=f'test_{run_id}.log', level=100)
     models = {
         'MPN': MPN,
@@ -47,30 +53,20 @@ def main():
     data_param = torch.load(data_param_path, map_location='cpu')
     xymean, xystd = data_param['xymean'], data_param['xystd']
     edgemean, edgestd = data_param['edgemean'], data_param['edgestd']
-        
+    # original test  
     testset = PowerFlowData(root=data_dir, case=grid_case,
                             split=[.5, .2, .3], task='test',
                             xymean=xymean, xystd=xystd, edgemean=edgemean, edgestd=edgestd)
-    print('data value range')
-    print(f'{testset.data.y.shape}')
-    _y = testset.data.y * xystd + xymean
-    is_slack = testset.data.bus_type == 0
-    is_pv = testset.data.bus_type == 1
-    is_pq = testset.data.bus_type == 2
-    _std = lambda x: ((x-x.mean()).square().sum()/x.numel()).sqrt().item()
-    _l1 = lambda x: ((x-x.mean()).abs().sum()/x.numel()).item()
-    _v = _y[is_pq,0]
-    _a = _y[torch.logical_or(is_pv, is_pq),1]
-    _p = _y[is_slack,2]
-    _q = _y[torch.logical_or(is_slack, is_pv),3]
-    print(f'v: {_v.min().item():.4f}, {_v.max().item():.4f}, STD {_std(_v):.4f}, L1 {_l1(_v):.4f}')
-    print(f'a: {_a.min().item():.4f}, {_a.max().item():.4f}, STD {_std(_a):.4f}, L1 {_l1(_a):.4f}')
-    print(f'p: {_p.min().item():.4f}, {_p.max().item():.4f}, STD {_std(_p):.4f}, L1 {_l1(_p):.4f}')
-    print(f'q: {_q.min().item():.4f}, {_q.max().item():.4f}, STD {_std(_q):.4f}, L1 {_l1(_q):.4f}')
+
+    # # our dataset tests
+    # testset = PowerFlowData(root=data_dir, case=grid_case,
+    #                         split=[.01, .01, 0.98], task='test',
+    #                         xymean=xymean, xystd=xystd, edgemean=edgemean, edgestd=edgestd)
+    
     test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False)
     _sample = testset[0]
     print(f'mean of vm,va,p,q:\t{xymean}')
-    # print(f'std of vm,va,p,q:\t{xystd}')
+    print(f'std of vm,va,p,q:\t{xystd}')
     print(f'#slack:{(_sample.bus_type==0).sum()},\t#pv:{(_sample.bus_type==1).sum()},\t#pq:{(_sample.bus_type==2).sum()}')
     
     pwr_imb_loss = PowerImbalance(*testset.get_data_means_stds()).to(device)
@@ -114,14 +110,18 @@ def main():
     masked_l2_terms = evaluate_epoch_v2(model, test_loader, _loss, device)
     for key, value in masked_l2_terms.items():
         print(f"MaskedL2 {key}:\t{value:.6f}")
+
     masked_l2_terms_de = evaluate_epoch_v2(model, test_loader, _loss, 
                                            pre_loss_fn=partial(denormalize, mean=xymean, std=xystd), device=device)
     for key, value in masked_l2_terms_de.items():
         print(f"MaskedL2(denorm) {key}:\t{value:.6f}")
+
+
     masked_l1_terms_de = evaluate_epoch_v2(model, test_loader, MaskedL1(), 
                                            pre_loss_fn=partial(denormalize, mean=xymean, std=xystd), device=device)
     for key, value in masked_l1_terms_de.items():
         print(f"MaskedL1(denorm) {key}:\t{value:.6f}")
+        
     for name, loss_fn in all_losses.items():
         test_loss_terms = evaluate_epoch_v2(model, test_loader, loss_fn, device)
         print(f"{name}:\t{test_loss_terms['total']:.6f}")
