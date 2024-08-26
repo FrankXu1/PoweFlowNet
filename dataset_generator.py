@@ -16,9 +16,8 @@ import os
 
 from utils.data_utils import perturb_topology
 
-number_of_samples = 30000
-number_of_processes = 10
-ENFORCE_Q_LIMS = False
+number_of_samples = 1
+number_of_processes = 1
 
 def create_case3():
     net = pp.create_empty_network()
@@ -54,8 +53,8 @@ def get_trafo_z_pu(net):
     net.trafo.loc[net.trafo.index, 'i0_percent'] = 0.
     net.trafo.loc[net.trafo.index, 'pfe_kw'] = 0.
     
-    z_pu = net.trafo['vk_percent'].values / 100. * 1000. / net.sn_mva
-    r_pu = net.trafo['vkr_percent'].values / 100. * 1000. / net.sn_mva
+    z_pu = net.trafo['vk_percent'].values / 100. / net.sn_mva
+    r_pu = net.trafo['vkr_percent'].values / 100. / net.sn_mva
     x_pu = np.sqrt(z_pu**2 - r_pu**2)
     
     return x_pu, r_pu
@@ -80,11 +79,11 @@ def get_adjacency_matrix(net):
     return A
 
 def generate_data(sublist_size, rng, base_net_create, num_lines_to_remove=0, num_lines_to_add=0):
-    edge_features_list = []
-    node_features_list = []
+    edge_features_list = [] # 这个其实就是sample数，作者把所有的case也就是sample保存在了一个文件里
+    node_features_list = [] # 同上，不过因为每个case里面具体情况不同，所以这个node和edge都是一一对应的
     # graph_feature_list = []
 
-    while len(edge_features_list) < sublist_size:
+    while len(edge_features_list) < sublist_size: # 这个sublist大小主要确定每个线程要生成多少case
         net = base_net_create()
         remove_c_nf(net)
         
@@ -139,7 +138,7 @@ def generate_data(sublist_size, rng, base_net_create, num_lines_to_remove=0, num
 
         try:
             net['converged'] = False
-            pp.runpp(net, algorithm='nr', init="results", numba=False, enforce_q_lims=ENFORCE_Q_LIMS)
+            pp.runpp(net, algorithm='nr', init="results", numba=False)
         except:
             if not net['converged']:
                 # print(f"net['converged'] = {net['converged']}")
@@ -161,18 +160,14 @@ def generate_data(sublist_size, rng, base_net_create, num_lines_to_remove=0, num
         trafo_edge_features[:, 1] = net.trafo['lv_bus'].values
         trafo_edge_features[:, 2], trafo_edge_features[:, 3] = get_trafo_z_pu(net)
         
-        edge_features = np.concatenate((edge_features, trafo_edge_features), axis=0)
+        # edge_features = np.concatenate((edge_features, trafo_edge_features), axis=0)       # 先撤回，看看结果有什么不同
 
         # Record node features
         #   bus type: 0 - slack bus, 1 - generator, 2 - load
         types = np.ones(n)*2 # type = load
         for j in range(net.gen.shape[0]):    
             # find index of case['gen'][j,0] in case['bus'][:,0]
-            index = np.where(net.gen['bus'].values[j] == net.bus['name'])[0][0] 
-            if ENFORCE_Q_LIMS:
-                if net.res_gen['q_mvar'][j] <= net.gen['min_q_mvar'][j] + 1e-6 \
-                    or net.res_gen['q_mvar'][j] >= net.gen['max_q_mvar'][j] - 1e-6:
-                        continue # seen as load bus
+            index = np.where(net.gen['bus'].values[j] == net.bus['name'])[0][0]        
             types[index] = 1  # type = generator
         for j in range(net.ext_grid.shape[0]):
             index = np.where(net.ext_grid['bus'].values[j] == net.bus['name'])[0][0]
@@ -197,13 +192,13 @@ def generate_data(sublist_size, rng, base_net_create, num_lines_to_remove=0, num
         # node_features_y[:, 7] = case['bus'][:, 5]  # Bs
 
         edge_features_list.append(edge_features)
-        node_features_list.append(node_features)
+        node_features_list.append(node_features) # 一个线程内，生成完的数据都要append到一个中间list中
         # graph_feature_list.append(baseMVA)
 
         if len(edge_features_list) % 10 == 0 or len(edge_features_list) == sublist_size:
             print(f'[Process {os.getpid()}] Current sample number: {len(edge_features_list)}')
             
-    return edge_features_list, node_features_list
+    return edge_features_list, node_features_list # 当这个线程生成完的所有数据生成完之后，返回，留待后续连接
 
 def generate_data_parallel(num_samples, num_processes, base_net_create, num_lines_to_remove=0, num_lines_to_add=0):
     sublist_size = num_samples // num_processes
@@ -281,10 +276,10 @@ if __name__ == '__main__':
 
     # save the features
     os.makedirs("./data/raw", exist_ok=True)
-    with open("./data/raw/"+complete_case_name+"_edge_features.npy", 'wb') as f:
+    with open("./data/raw/"+complete_case_name+"_3_edge_features.npy", 'wb') as f:
         np.save(f, edge_features)
 
-    with open("./data/raw/"+complete_case_name+"_node_features.npy", 'wb') as f:
+    with open("./data/raw/"+complete_case_name+"_3_node_features.npy", 'wb') as f:
         np.save(f, node_features)
 
     # with open("./data/"+test_case+"_graph_features.npy", 'wb') as f:

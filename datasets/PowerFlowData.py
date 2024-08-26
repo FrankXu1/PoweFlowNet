@@ -35,7 +35,7 @@ edge_feature_names_from_files = [
 
 def random_bus_type(data: Data) -> Data:
     " data.bus_type -> randomize "
-    data.bus_type = torch.randint_like(data.bus_type, low=0, high=2)
+    data.bus_type = torch.randint_like(data.bus_type, low=0, high=2) # 0,1之间
     
     return data
     
@@ -68,6 +68,10 @@ class PowerFlowData(InMemoryDataset):
         '118v2',
         '14v2',
     ]
+    # mixed_cases = [
+    #     '118',
+    #     '14',
+    # ]
     slack_mask = (0, 0, 1, 1) # 1 = need to predict, 0 = no need to predict
     gen_mask = (0, 1, 0, 1) 
     load_mask = (1, 1, 0, 0)
@@ -173,25 +177,33 @@ class PowerFlowData(InMemoryDataset):
         assert len(self.raw_paths) % 2 == 0
         raw_paths_per_case = [[self.raw_paths[i], self.raw_paths[i+1],] for i in range(0, len(self.raw_paths), 2)]
         all_case_data = [[],[],[]]
+        # print(raw_paths_per_case)
         for case, raw_paths in enumerate(raw_paths_per_case):
             # process multiple cases (if specified) e.g. cases = [14, 118]
-            edge_features = torch.from_numpy(np.load(raw_paths[0])).float()
+            edge_features = torch.from_numpy(np.load(raw_paths[0])).float() # 都是npy的结果
             node_features = torch.from_numpy(np.load(raw_paths[1])).float()
 
             assert self.split is not None
             if self.split is not None:
-                split_len = [int(len(node_features) * i) for i in self.split]
+                split_len = [int(len(node_features) * i) for i in self.split] # 分成几个固定大小的份，总和是全部
             
-            split_edge_features = torch.split(edge_features, split_len, dim=0)
+            split_edge_features = torch.split(edge_features, split_len, dim=0) #分成固定几份，（tensor1，tensor2，tensor3）
             split_node_features = torch.split(node_features, split_len, dim=0)
             
-            for idx in range(len(split_edge_features)):
+            for idx in range(len(split_edge_features)): # idx = 0，1，2
                 # shape of element in split_xx: [N, n_edges/n_nodes, n_features]
                 # for each case, process train, val, test split
-                y = split_node_features[idx][:, :, 2:] # shape (N, n_ndoes, 4); Vm, Va, P, Q
-                bus_type = split_node_features[idx][:, :, 1].type(torch.long) # shape (N, n_nodes)
+                y = split_node_features[idx][:, :, 2:] # shape (N, n_ndoes, 4); Vm, Va, P, Q # 每份都截取4个values
+                # print(y)
+                bus_type = split_node_features[idx][:, :, 1].type(torch.long) # shape (N, n_nodes #，1) # 提取的第一列数据type
+
+                # slack_mask = (0, 0, 1, 1) # 1 = need to predict, 0 = no need to predict
+                # gen_mask = (0, 1, 0, 1) 
+                # load_mask = (1, 1, 0, 0)
+                # bus_type_mask = (slack_mask, gen_mask, load_mask)
+
                 bus_type_mask = torch.tensor(self.bus_type_mask)[bus_type] # shape (N, n_nodes, 4)
-                x = y.clone()*(1.-bus_type_mask) # shape (N, n_nodes, 4)
+                x = y.clone()*(1.-bus_type_mask) # shape (N, n_nodes, 4) #反转相乘
                 e = split_edge_features[idx] # shape (N, n_edges, 4)
                 data_list = [
                     Data(

@@ -32,6 +32,8 @@ def load_model(
     except FileNotFoundError:
         print("File not found. Could not load saved model.")
         return -1
+    except:
+        print("unknown error")
 
     return model, saved
 
@@ -127,7 +129,7 @@ def evaluate_epoch_v2(
     total_loss_terms = None
     num_samples = 0
     pbar = tqdm(loader, total=len(loader), desc='Evaluating:')
-    for data in pbar:
+    for batch_idx, data in enumerate(pbar):        
         loss_terms = {}
         data = data.to(device)
         out = model(data)
@@ -160,10 +162,21 @@ def evaluate_epoch_v2(
 
         num_samples += len(data)
         if total_loss_terms is None:
-            total_loss_terms = {key: value.item() for key, value in loss_terms.items()}
+            total_loss_terms = {key: value.item()*len(data) for key, value in loss_terms.items()} # 这里乘了个len
         else:
             for key, value in total_loss_terms.items():
                 total_loss_terms[key] = value + loss_terms[key].item() * len(data)
+                # print(f"every batch loss:{loss_terms[key].item()}  number in this batch:{len(data)}")
+
+        # # 打印每个batch后的total_loss_terms和num_samples
+        # print(f"Batch {batch_idx+1}:")
+        # print(f"  Total Loss Terms: {total_loss_terms['total']}")
+        # print(f"  Number of Samples: {num_samples}")
+        # print(f"  Mean Loss so far: {total_loss_terms['total'] / num_samples}\n")
 
     mean_loss_terms = {key: value/num_samples for key, value in total_loss_terms.items()}
+    # print('num_samples',num_samples)
+
+    # print('Final number of samples:', num_samples)
+    # print('Final mean loss terms:', mean_loss_terms)
     return mean_loss_terms
